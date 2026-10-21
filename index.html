@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d6676">
+<title>RT Bedside Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+[hidden]{display:none!important}
+body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Layout: sticky instrument bar with unit switch + section tabs; an inputs panel beside live readout cards (stacked on phones) */
+:root{
+  --bg:#edf2f2; --surface:#ffffff; --sunk:#f4f7f7; --ink:#132329; --muted:#55676e; --line:#d2dcde;
+  --accent:#0d6676; --accent-ink:#ffffff; --accent-soft:#d9ecef;
+  --ok:#1b6f43; --ok-bg:#e0f1e7; --warn:#8f5300; --warn-bg:#fbeed6; --crit:#b0241c; --crit-bg:#fbe2df; --info:#3c5560; --info-bg:#e4ecee;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c1315; --surface:#141f22; --sunk:#0f191b; --ink:#e2ebeb; --muted:#93a6ab; --line:#27383c;
+    --accent:#5ec0d2; --accent-ink:#06262c; --accent-soft:#15363d;
+    --ok:#62d297; --ok-bg:#12301f; --warn:#f1b65c; --warn-bg:#352710; --crit:#ff8b7e; --crit-bg:#3a1714; --info:#a9bcc2; --info-bg:#1b2a2e;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c1315; --surface:#141f22; --sunk:#0f191b; --ink:#e2ebeb; --muted:#93a6ab; --line:#27383c;
+  --accent:#5ec0d2; --accent-ink:#06262c; --accent-soft:#15363d;
+  --ok:#62d297; --ok-bg:#12301f; --warn:#f1b65c; --warn-bg:#352710; --crit:#ff8b7e; --crit-bg:#3a1714; --info:#a9bcc2; --info-bg:#1b2a2e;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+.gut{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar .gut{padding-block:10px 0}
+.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{margin-right:auto;min-width:0}
+.brand b{display:block;font:700 1.15rem/1.15 var(--f-display);letter-spacing:.01em}
+.brand span{font-size:.74rem;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;background:var(--sunk)}
+.seg button{border:0;background:transparent;font:500 .8rem var(--f-mono);padding:6px 11px;border-radius:999px;color:var(--muted);cursor:pointer;min-height:32px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .85rem var(--f-body);padding:8px 12px;border-radius:8px;cursor:pointer;min-height:36px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{align-self:flex-start;padding:6px 10px;min-height:32px;font-size:.8rem}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin-top:6px}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:0 0 auto;border:0;background:none;font:600 .92rem var(--f-display);letter-spacing:.02em;color:var(--muted);padding:10px 11px 9px;border-bottom:3px solid transparent;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* main */
+main .gut{padding-block:16px 8px;display:flex;flex-direction:column;gap:14px}
+.notice{background:var(--accent-soft);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:.86rem}
+.copybox{display:flex;flex-direction:column;gap:6px}
+.copybox textarea{width:100%;min-height:160px;font:.8rem var(--f-mono);background:var(--sunk);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px}
+.sec-head h2{margin:0;font:700 1.55rem/1.15 var(--f-display);text-wrap:balance}
+.sec-head p{margin:4px 0 0;color:var(--muted);font-size:.9rem;max-width:65ch}
+.sec{display:flex;flex-direction:column;gap:14px}
+.layout{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){.layout{grid-template-columns:minmax(300px,350px) minmax(0,1fr);align-items:start}}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.lbl{margin:0 0 10px;font:600 .74rem var(--f-display);text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld.wide{grid-column:1/-1}
+.fl{font-size:.78rem;color:var(--muted);font-weight:500}
+.hint{font-size:.7rem;color:var(--muted)}
+.inw{position:relative}
+.inw input,.fld select{width:100%;height:44px;font:500 1rem var(--f-mono);font-variant-numeric:tabular-nums;color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:8px}
+.inw input{padding:0 54px 0 10px}
+.fld select{padding:0 8px;font-family:var(--f-body);font-size:.92rem}
+.un{position:absolute;right:9px;top:50%;transform:translateY(-50%);font:.72rem var(--f-mono);color:var(--muted);pointer-events:none}
+.chk{grid-column:1/-1;display:flex;gap:10px;align-items:flex-start;font-size:.87rem;cursor:pointer}
+.chk input{width:20px;height:20px;accent-color:var(--accent);margin:1px 0 0;flex:none}
+
+/* cards */
+.cards{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);align-content:start}
+@media (min-width:640px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card.span2{grid-column:1/-1}
+.card header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.card h3{margin:0;font:600 .8rem/1.3 var(--f-display);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.pill{font:600 .72rem/1.3 var(--f-body);padding:3px 8px;border-radius:999px;text-align:right;max-width:62%}
+.s-ok{background:var(--ok-bg);color:var(--ok)} .s-warn{background:var(--warn-bg);color:var(--warn)}
+.s-crit{background:var(--crit-bg);color:var(--crit)} .s-info{background:var(--info-bg);color:var(--info)}
+.val{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.num{font:600 1.85rem/1.1 var(--f-mono);font-variant-numeric:tabular-nums}
+.u{font:.8rem var(--f-mono);color:var(--muted)}
+.card[data-s="ok"] .num{color:var(--ok)} .card[data-s="warn"] .num{color:var(--warn)} .card[data-s="crit"] .num{color:var(--crit)}
+.headline{margin:0;font:700 1.25rem/1.25 var(--f-display);text-wrap:balance}
+.card[data-s="warn"] .headline{color:var(--warn)} .card[data-s="crit"] .headline{color:var(--crit)} .card[data-s="ok"] .headline{color:var(--ok)}
+.rows{margin:0;display:grid;gap:4px}
+.rows div{display:flex;justify-content:space-between;gap:12px;font-size:.85rem;border-top:1px dashed var(--line);padding-top:4px}
+.rows dt{color:var(--muted);min-width:0}
+.rows dd{margin:0;font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.note{margin:0;font-size:.79rem;color:var(--muted)}
+.need{margin:0;font-size:.85rem;color:var(--muted);font-style:italic}
+.card[data-s="empty"]{background:var(--sunk)}
+.steps{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+.steps li{display:grid;grid-template-columns:12px minmax(0,1fr);gap:9px;font-size:.88rem}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:6px;background:var(--info)}
+.d-ok{background:var(--ok)} .d-warn{background:var(--warn)} .d-crit{background:var(--crit)} .d-info{background:var(--info)}
+.checklist{margin:0;padding:0;list-style:none;display:grid;gap:5px;font-size:.86rem}
+.checklist li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:6px}
+.mk{font:600 .85rem var(--f-mono);text-align:center;border-radius:4px}
+.c-met .mk{color:var(--ok);background:var(--ok-bg)} .c-no .mk{color:var(--crit);background:var(--crit-bg)} .c-nodata .mk{color:var(--muted);background:var(--info-bg)}
+.c-nodata{color:var(--muted)}
+.tbl-wrap{overflow-x:auto}
+.tbl-wrap p{margin:6px 0 4px;font-size:.78rem;color:var(--muted);font-weight:600}
+table{border-collapse:collapse;font:.8rem var(--f-mono);font-variant-numeric:tabular-nums}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:center;white-space:nowrap}
+th{font:600 .72rem var(--f-body);color:var(--muted);text-align:left;background:var(--sunk)}
+td.hit{background:var(--accent);color:var(--accent-ink);font-weight:600}
+
+footer .gut{padding-block:8px 32px;display:flex;flex-direction:column;gap:10px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.disc{margin:0;font-size:.78rem;color:var(--muted);max-width:70ch}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.88rem;z-index:40;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion: no-preference){.tabs button,.seg button{transition:background .15s,color .15s,border-color .15s}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="gut">
+    <div class="top">
+      <div class="brand"><b>RT Bedside Calculator</b><span>ICU respiratory therapy</span></div>
+      <div class="seg" role="group" aria-label="Blood gas units">
+        <button type="button" data-unit="mmHg" aria-pressed="true">mmHg</button>
+        <button type="button" data-unit="kPa" aria-pressed="false">kPa</button>
+      </div>
+      <button type="button" class="btn primary" id="copyBtn">Copy summary</button>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Calculator sections"></nav>
+  </div>
+</header>
+
+<main>
+  <div class="gut">
+    <p class="notice" id="notice"></p>
+    <div class="copybox" id="copyBox" hidden>
+      <label class="fl" for="copyText">Copying is blocked here. Select the text below and copy it.</label>
+      <textarea id="copyText" readonly></textarea>
+    </div>
+    <div id="sections"></div>
+  </div>
+</main>
+
+<footer>
+  <div class="gut">
+    <div class="actions">
+      <button type="button" class="btn" id="exampleBtn">Load example patient</button>
+      <button type="button" class="btn" id="clearBtn">Clear all</button>
+    </div>
+    <p class="disc">Decision support for trained clinicians. Results are only as good as the values entered and do not replace clinical judgment or your unit's protocols. Patient values stay on this page and are not saved.</p>
+  </div>
+</footer>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+"use strict";
+const G = 7.50062; // mmHg per kPa
+
+/* ---------- field definitions ---------- */
+const F = {
+  sex:{l:'Sex',kind:'sel',o:[['','Select'],['M','Male'],['F','Female']],s:'M'},
+  height:{l:'Height',u:'cm',s:175},
+  age:{l:'Age',u:'years',s:55},
+  weight:{l:'Actual weight',u:'kg',s:82},
+  fio2:{l:'FiO₂',u:'%',s:50,h:'21–100'},
+  spo2:{l:'SpO₂',u:'%',s:92},
+  sao2:{l:'SaO₂ (ABG)',u:'%',s:null,h:'Optional'},
+  pao2:{l:'PaO₂',kind:'gas',s:68},
+  paco2:{l:'PaCO₂',kind:'gas',s:52},
+  ph:{l:'pH',u:'',s:7.28},
+  hco3:{l:'HCO₃⁻',u:'mmol/L',s:23.6},
+  na:{l:'Na⁺',u:'mmol/L',s:138},
+  cl:{l:'Cl⁻',u:'mmol/L',s:104},
+  alb:{l:'Albumin',u:'g/L',s:35,h:'g/dL also accepted'},
+  pb:{l:'Barometric pressure',u:'mmHg',s:null,h:'Blank = 760'},
+  map:{l:'Mean airway pressure',u:'cmH₂O',s:16},
+  hb:{l:'Hemoglobin',u:'g/dL',s:11,h:'g/L also accepted'},
+  co:{l:'Cardiac output',u:'L/min',s:5.5},
+  targetPao2:{l:'Target PaO₂',kind:'gas',s:80},
+  vt:{l:'Tidal volume',u:'mL',s:450},
+  rr:{l:'Resp. rate',u:'/min',s:22},
+  ppeak:{l:'Peak pressure',u:'cmH₂O',s:33},
+  pplat:{l:'Plateau pressure',u:'cmH₂O',s:27},
+  peep:{l:'PEEP',u:'cmH₂O',s:10},
+  totalpeep:{l:'Total PEEP (exp. hold)',u:'cmH₂O',s:11},
+  flow:{l:'Insp. flow',u:'L/min',s:60},
+  ti:{l:'Insp. time',u:'s',s:0.9},
+  etco2:{l:'EtCO₂',kind:'gas',s:40},
+  peco2:{l:'Mixed expired CO₂',kind:'gas',s:null,h:'PĒCO₂, volumetric capnography'},
+  targetPaco2:{l:'Target PaCO₂',kind:'gas',s:45},
+  hr:{l:'Heart rate',u:'/min',s:105},
+  gcs:{l:'GCS',u:'/15',s:15},
+  spRR:{l:'RR during SBT',u:'/min',s:24},
+  spVt:{l:'Vt during SBT',u:'mL',s:380},
+  nif:{l:'NIF / MIP',u:'cmH₂O',s:28,h:'Enter the size, e.g. 25 for −25'},
+  roxTime:{l:'Time on HFNC',kind:'sel',o:[['2','2 hours'],['6','6 hours'],['12','12 hours']],s:'6'},
+  supMode:{l:'Respiratory support',kind:'sel',o:[['intubated','Intubated, invasive ventilation'],['hfno','HFNO at ≥ 30 L/min'],['niv','NIV or CPAP, PEEP ≥ 5'],['limited','Other O₂ (resource-limited)']],s:'intubated'},
+  cxr:{l:'Chest X-ray: quadrants with infiltrates',kind:'sel',o:[['','Select'],['0','None'],['1','1 quadrant'],['2','2 quadrants'],['3','3 quadrants'],['4','4 quadrants']],s:'3'},
+  c_time:{l:'Onset within 1 week of a known insult or new/worsening symptoms',kind:'chk',s:true},
+  c_bilat:{l:'Bilateral opacities not fully explained by effusion, collapse or nodules',kind:'chk',s:true},
+  c_card:{l:'Not fully explained by cardiac failure or fluid overload',kind:'chk',s:true},
+  s_cause:{l:'Cause of respiratory failure improving',kind:'chk',s:true},
+  s_hemo:{l:'Hemodynamically stable, no or low-dose vasopressor',kind:'chk',s:false},
+  s_awake:{l:'Awake and follows commands',kind:'chk',s:false},
+  s_cough:{l:'Effective cough, manageable secretions',kind:'chk',s:false},
+  ncFlow:{l:'Nasal cannula flow',u:'L/min',s:3},
+  cylUnit:{l:'Gauge unit',kind:'sel',o:[['bar','bar'],['psi','psi']],s:'bar'},
+  cylSize:{l:'Cylinder size',kind:'sel',o:[['','Select'],['D','D'],['E','E'],['M','M'],['G','G'],['HK','H / K']],s:'E',show:'psi'},
+  cylPpsi:{l:'Gauge pressure',u:'psi',s:2000,show:'psi'},
+  cylResPsi:{l:'Safety reserve',u:'psi',s:200,show:'psi',h:'Blank = 200'},
+  cylCap:{l:'Water capacity',u:'L',s:10,show:'bar',h:'Printed on the cylinder'},
+  cylPbar:{l:'Gauge pressure',u:'bar',s:150,show:'bar'},
+  cylResBar:{l:'Safety reserve',u:'bar',s:10,show:'bar',h:'Blank = 0'},
+  cylFlow:{l:'O₂ flow',u:'L/min',s:6}
+};
+for (const k in F) if (!F[k].kind) F[k].kind = 'num';
+const DEFAULTS = {cylUnit:'bar', roxTime:'2', supMode:'intubated'};
+
+const SECTIONS = [
+  {id:'patient',name:'Patient',blurb:'Sex and height give predicted body weight (PBW), which the mechanics and ventilation calculators use.',
+   inputs:['sex','height','age','weight'],calcs:['pbw','bmi','exppao2']},
+  {id:'oxygen',name:'Oxygenation',tab:'Oxygen',blurb:'Oxygenation ratios, gradients and O₂ delivery. Use values from the same ABG and ventilator settings.',
+   inputs:['fio2','spo2','pao2','paco2','sao2','pb','map','hb','co','targetPao2'],calcs:['pf','sf','palv','aa','aA','fio2t','oi','osi','cao2','do2']},
+  {id:'mechanics',name:'Lung mechanics',tab:'Mechanics',blurb:'Use volume control with square flow. Take Pplat from a 0.5–1 s inspiratory hold and total PEEP from an expiratory hold.',
+   inputs:['vt','rr','ppeak','pplat','peep','totalpeep','flow','ti','sex','height'],calcs:['pplat','dp','vtkg','cstat','cdyn','raw','autopeep','tau','mp']},
+  {id:'ventilation',name:'Ventilation and CO₂',tab:'Ventilation',blurb:'Plan rate or tidal volume changes for a target PaCO₂, and check dead space and ventilation efficiency.',
+   inputs:['rr','vt','paco2','targetPaco2','etco2','peco2'],calcs:['ve','rrt','grad','vdvt','vr']},
+  {id:'abg',name:'ABG interpretation',tab:'ABG',blurb:'Step-by-step acid–base reading with expected compensation, anion gap and delta ratio.',
+   inputs:['ph','paco2','hco3','pao2','fio2','na','cl','alb'],calcs:['abg','ag','delta']},
+  {id:'weaning',name:'Weaning, HFNC and NIV',tab:'Weaning',blurb:'SBT readiness and RSBI, ROX index for high-flow nasal oxygen, and HACOR score for NIV.',
+   inputs:['spRR','spVt','nif','peep','fio2','ph','pao2','s_cause','s_hemo','s_awake','s_cough','spo2','rr','hr','gcs','roxTime'],calcs:['rsbi','sbt','rox','hacor']},
+  {id:'ards',name:'ARDS',tab:'ARDS',blurb:'2023 global and Berlin definitions, Murray lung injury score and ARDSnet PEEP/FiO₂ tables. Fields are shared with the other tabs.',
+   inputs:['supMode','c_time','c_bilat','c_card','pao2','fio2','spo2','peep','cxr','vt','pplat'],calcs:['global','berlin','murray','peeptab']},
+  {id:'tools',name:'Bedside tools',tab:'Tools',blurb:'Oxygen cylinder time, endotracheal tube size, nasal cannula FiO₂ and pressure unit conversion.',
+   inputs:['ncFlow','cylUnit','cylSize','cylPpsi','cylResPsi','cylCap','cylPbar','cylResBar','cylFlow','age','sex','height','weight'],calcs:['ncfio2','cyl','ett'],conv:true}
+];
+
+/* ---------- state + helpers ---------- */
+let S = {};
+let unit = 'mmHg';
+let exState = 'example';
+let LAST = {};
+
+function n(k){const v=S[k];return (typeof v==='number'&&isFinite(v))?v:null}
+function has(){for(const k of arguments) if(n(k)===null) return false; return true}
+function fio(){const v=n('fio2');if(v===null)return null;const x=v<=1?v:v/100;return (x>=0.2095&&x<=1)?x:null}
+function heightCm(){let h=n('height');if(h===null)return null;if(h<3)h*=100;return h}
+function pbw(){const h=heightCm();if(h===null||!S.sex)return null;const w=(S.sex==='F'?45.5:50)+0.91*(h-152.4);return w>0?w:null}
+function pbv(){const p=n('pb');return (p===null||p<300)?760:p}
+function palv(){const f=fio(),pc=n('paco2');if(f===null||pc===null)return null;return f*(pbv()-47)-pc/0.8}
+function hbg(){const h=n('hb');return h===null?null:(h>25?h/10:h)}
+function albGL(){const a=n('alb');return a===null?null:(a<10?a*10:a)}
+function pfV(){const f=fio(),p=n('pao2');return (f===null||p===null)?null:p/f}
+function sfV(){const f=fio(),s=n('spo2');return (f===null||s===null)?null:s/f}
+function cstatV(){if(!has('vt','pplat','peep'))return null;const d=n('pplat')-n('peep');return d>0?n('vt')/d:null}
+function rawV(){if(!has('ppeak','pplat','flow'))return null;const fl=n('flow');return fl>0?(n('ppeak')-n('pplat'))/(fl/60):null}
+function agV(){if(!has('na','cl','hco3'))return null;const ag=n('na')-(n('cl')+n('hco3'));const a=albGL();return {ag:ag,agc:a===null?ag:ag+0.25*(40-a),corr:a!==null}}
+function gf(mm){if(unit==='kPa'){const k=mm/G;return k.toFixed(Math.abs(k)<10?2:1)}return String(Math.round(mm))}
+function gu(){return unit}
+function g(mm){return gf(mm)+' '+unit}
+function r1(x){return x.toFixed(1)}
+function pct(f){return Math.round(f*100)}
+function rnd(x,d){return Number(x.toFixed(d))}
+
+/* ---------- calculators ---------- */
+const LOW=[[.3,.3,5],[.4,.4,5],[.4,.4,8],[.5,.5,8],[.5,.5,10],[.6,.6,10],[.7,.7,10],[.7,.7,12],[.7,.7,14],[.8,.8,14],[.9,.9,14],[.9,.9,16],[.9,.9,18],[1,1,'18–24']];
+const HIGH=[[.3,.3,5],[.3,.3,8],[.3,.3,10],[.3,.3,12],[.3,.3,14],[.4,.4,14],[.4,.4,16],[.5,.5,16],[.5,.5,18],[.5,.8,20],[.8,.8,22],[.9,.9,22],[1,1,22],[1,1,24]];
+const CYL={D:.16,E:.28,M:1.56,G:2.41,HK:3.14};
+
+function drText(d){
+  if(d<0.4) return 'normal anion gap (hyperchloremic) acidosis dominates';
+  if(d<0.8) return 'combined high and normal anion gap acidosis';
+  if(d<=2) return 'pure high anion gap acidosis';
+  return 'high anion gap acidosis plus metabolic alkalosis (or pre-existing compensated respiratory acidosis)';
+}
+
+const CALCS = {
+  /* patient */
+  pbw:{t:'Predicted body weight',need:['sex','height'],f(){
+    const w=pbw();if(w===null)return null;
+    return {v:r1(w),u:'kg',s:'info',tag:'ARDSnet formula',
+      rows:[['Vt at 4 mL/kg',Math.round(4*w)+' mL'],['Vt at 6 mL/kg',Math.round(6*w)+' mL'],['Vt at 8 mL/kg',Math.round(8*w)+' mL']],
+      note:'Male 50 + 0.91 × (height − 152.4); female 45.5 + 0.91 × (height − 152.4). Set tidal volume from PBW, never actual weight.'};
+  }},
+  bmi:{t:'Body mass index',need:['height','weight'],f(){
+    const h=heightCm(),w=n('weight');if(h===null||w===null||h<=0)return null;
+    const b=w/Math.pow(h/100,2);let s,tag;
+    if(b<18.5){s='warn';tag='Underweight'}else if(b<25){s='ok';tag='Normal'}else if(b<30){s='warn';tag='Overweight'}else if(b<40){s='warn';tag='Obese'}else{s='crit';tag='Severe obesity'}
+    const rows=[];const p=pbw();if(p!==null)rows.push(['Actual minus predicted weight',r1(w-p)+' kg']);
+    return {v:r1(b),u:'kg/m²',s,tag,rows};
+  }},
+  exppao2:{t:'Expected PaO₂ for age',need:['age'],f(){
+    const a=n('age');if(a===null)return null;
+    return {v:gf(109-0.43*a),u:gu(),s:'info',tag:'Room air',rows:[['Expected A–a gradient on room air',g(a/4+4)]],
+      note:'Sorbini equation (supine, room air) and age/4 + 4 for A–a. Rough guides only.'};
+  }},
+
+  /* oxygenation */
+  pf:{t:'P/F ratio',need:['pao2','fio2'],f(){
+    const v=pfV();if(v===null)return null;let s,tag;
+    if(v>300){s='ok';tag='Above ARDS range'}else if(v>200){s='warn';tag='Mild range (201–300)'}else if(v>100){s='crit';tag='Moderate range (101–200)'}else{s='crit';tag='Severe range (≤ 100)'}
+    return {v:Math.round(v),u:'mmHg',s,tag,rows:[['In kPa',r1(v/G)+' kPa']],note:'Berlin ranges apply with PEEP or CPAP ≥ 5 cmH₂O.'};
+  }},
+  sf:{t:'S/F ratio',need:['spo2','fio2'],f(){
+    const v=sfV();if(v===null)return null;const sp=n('spo2');
+    if(sp>97) return {v:Math.round(v),s:'info',tag:'SpO₂ above 97%',note:'S/F is unreliable when SpO₂ is above 97%. Wean FiO₂ to an SpO₂ of 88–97% before using it.'};
+    let s,tag;
+    if(v>315){s='ok';tag='Above ARDS cut-off'}else if(v>235){s='warn';tag='Mild range (236–315)'}else if(v>148){s='crit';tag='Moderate range (149–235)'}else{s='crit';tag='Severe range (≤ 148)'}
+    return {v:Math.round(v),s,tag,note:'Cut-offs from the 2023 global ARDS definition (intubated ranges).'};
+  }},
+  palv:{t:'Alveolar O₂ (PAO₂)',need:['fio2','paco2'],f(){
+    const v=palv();if(v===null)return null;
+    return {v:gf(v),u:gu(),s:'info',tag:'Pb '+pbv()+' mmHg',note:'FiO₂ × (Pb − 47) − PaCO₂ ÷ 0.8. Pb is 760 mmHg at sea level.'};
+  }},
+  aa:{t:'A–a gradient',need:['fio2','paco2','pao2'],f(){
+    const PA=palv(),po=n('pao2');if(PA===null||po===null)return null;
+    const v=PA-po,f=fio(),a=n('age');const rows=[];
+    if(a!==null)rows.push(['Expected on room air',g(a/4+4)]);
+    if(v<0)return {v:gf(v),u:gu(),s:'warn',tag:'Check inputs',rows,note:'A negative gradient is not possible. Check FiO₂, PaO₂ and PaCO₂.'};
+    if(f<=0.215){
+      const lim=a!==null?a/4+4:15;
+      return {v:gf(v),u:gu(),s:v>lim+5?'warn':'ok',tag:v>lim+5?'Raised':'Normal',rows,note:'Raised gradient points to V/Q mismatch, shunt or diffusion problems rather than hypoventilation.'};
+    }
+    return {v:gf(v),u:gu(),s:'info',tag:'On FiO₂ '+pct(f)+'%',rows,note:'The normal gradient widens as FiO₂ rises (up to about 60 mmHg on 100%). Compare values at the same FiO₂.'};
+  }},
+  aA:{t:'a/A ratio',need:['fio2','paco2','pao2'],f(){
+    const PA=palv(),po=n('pao2');if(PA===null||po===null||PA<=0)return null;
+    const v=po/PA;
+    return {v:v.toFixed(2),s:v>=0.75?'ok':'warn',tag:v>=0.75?'Normal (≥ 0.75)':'Reduced (< 0.75)',note:'Stays fairly stable when FiO₂ changes, so it is used to predict the FiO₂ needed.'};
+  }},
+  fio2t:{t:'FiO₂ for target PaO₂',need:['fio2','paco2','pao2','targetPao2'],f(){
+    const PA=palv(),po=n('pao2'),tg=n('targetPao2'),f=fio(),pc=n('paco2');
+    if(PA===null||po===null||tg===null||PA<=0||po<=0)return null;
+    const aA=po/PA;const fn=((tg/aA)+pc/0.8)/(pbv()-47);const fpf=tg*f/po;
+    const rows=[['Target PaO₂',g(tg)],['By P/F ratio method',Math.round(Math.min(fpf,9.99)*100)+'%']];
+    const note='a/A ratio method; assumes gas exchange stays the same. Recheck an ABG after changing FiO₂.';
+    if(fn>1)return {v:'>100',u:'%',s:'crit',tag:'Not reachable',rows,note:'The target cannot be reached with FiO₂ alone at current gas exchange. Consider PEEP or other measures.'};
+    if(fn<0.21)return {v:'21',u:'%',s:'ok',tag:'Room air enough',rows,note};
+    return {v:pct(fn),u:'%',s:fn>0.6?'warn':'info',tag:fn>0.6?'High FiO₂ needed':'Suggested setting',rows,note};
+  }},
+  oi:{t:'Oxygenation index (OI)',need:['map','fio2','pao2'],f(){
+    const f=fio(),m=n('map'),po=n('pao2');if(f===null||m===null||po===null||po<=0)return null;
+    const v=m*f*100/po;let s,tag;
+    if(v<4){s='ok';tag='Below PARDS range'}else if(v<8){s='warn';tag='Mild (4–8)'}else if(v<16){s='crit';tag='Moderate (8–16)'}else{s='crit';tag='Severe (≥ 16)'}
+    return {v:r1(v),s,tag,note:'MAP × FiO₂(%) ÷ PaO₂ (mmHg). Categories are PALICC paediatric ranges; in adults use it to track trends.'};
+  }},
+  osi:{t:'Oxygen saturation index (OSI)',need:['map','fio2','spo2'],f(){
+    const f=fio(),m=n('map'),sp=n('spo2');if(f===null||m===null||sp===null||sp<=0)return null;
+    const v=m*f*100/sp;
+    if(sp>97)return {v:r1(v),s:'info',tag:'SpO₂ above 97%',note:'OSI is unreliable when SpO₂ is above 97%.'};
+    let s,tag;
+    if(v<5){s='ok';tag='Below PARDS range'}else if(v<7.5){s='warn';tag='Mild (5–7.5)'}else if(v<12.3){s='crit';tag='Moderate (7.5–12.3)'}else{s='crit';tag='Severe (≥ 12.3)'}
+    return {v:r1(v),s,tag,note:'MAP × FiO₂(%) ÷ SpO₂. Use when no ABG is available. PALICC paediatric ranges.'};
+  }},
+  cao2:{t:'O₂ content (CaO₂)',need:['hb','sao2|spo2'],f(){
+    const hb=hbg(),sat=n('sao2')!==null?n('sao2'):n('spo2');if(hb===null||sat===null)return null;
+    const bound=1.34*hb*sat/100,dis=0.003*(n('pao2')||0),v=bound+dis;
+    return {v:r1(v),u:'mL/dL',s:v<15?'warn':'ok',tag:v<15?'Low':'Adequate',rows:[['Bound to Hb',r1(bound)+' mL/dL'],['Dissolved',dis.toFixed(2)+' mL/dL']],
+      note:'1.34 × Hb × SaO₂ + 0.003 × PaO₂. Uses SpO₂ when SaO₂ is blank. Normal about 20 mL/dL.'};
+  }},
+  do2:{t:'O₂ delivery (DO₂)',need:['hb','sao2|spo2','co'],f(){
+    const hb=hbg(),sat=n('sao2')!==null?n('sao2'):n('spo2'),co=n('co');if(hb===null||sat===null||co===null)return null;
+    const ca=1.34*hb*sat/100+0.003*(n('pao2')||0);const v=ca*co*10;
+    return {v:Math.round(v),u:'mL/min',s:'info',tag:'CaO₂ × CO × 10',note:'Typical resting adult value is about 1000 mL/min.'};
+  }},
+
+  /* mechanics */
+  pplat:{t:'Plateau pressure',need:['pplat'],f(){
+    const p=n('pplat');if(p===null)return null;
+    return {v:rnd(p,1),u:'cmH₂O',s:p>30?'crit':'ok',tag:p>30?'Above 30 cmH₂O':'Within limit (≤ 30)',note:'Measure with a 0.5–1 second inspiratory hold.'};
+  }},
+  dp:{t:'Driving pressure',need:['pplat','peep'],f(){
+    if(!has('pplat','peep'))return null;const v=n('pplat')-n('peep');
+    return {v:rnd(v,1),u:'cmH₂O',s:v>15?'warn':'ok',tag:v>15?'Above 15 cmH₂O':'At target (≤ 15)',note:'Pplat − PEEP. Above 15 cmH₂O is linked to higher mortality in ARDS (Amato 2015).'};
+  }},
+  vtkg:{t:'Tidal volume per kg PBW',need:['vt','sex','height'],f(){
+    const w=pbw(),vt=n('vt');if(w===null||vt===null)return null;
+    const v=vt/w;let s,tag;
+    if(v<4){s='warn';tag='Below 4 mL/kg'}else if(v<=6.5){s='ok';tag='Lung-protective'}else if(v<=8){s='ok';tag='Within 4–8 mL/kg'}else if(v<=10){s='warn';tag='Above 8 mL/kg'}else{s='crit';tag='Above 10 mL/kg'}
+    return {v:r1(v),u:'mL/kg',s,tag,rows:[['PBW',r1(w)+' kg'],['Vt at 6 mL/kg',Math.round(6*w)+' mL']]};
+  }},
+  cstat:{t:'Static compliance',need:['vt','pplat','peep'],f(){
+    const c=cstatV();if(c===null)return null;
+    return {v:r1(c),u:'mL/cmH₂O',s:c<40?'warn':'ok',tag:c<40?'Low':'Acceptable',note:'Vt ÷ (Pplat − PEEP). Typical ventilated adult 50–80. Low values mean stiff lungs or chest wall.'};
+  }},
+  cdyn:{t:'Dynamic compliance',need:['vt','ppeak','peep'],f(){
+    if(!has('vt','ppeak','peep'))return null;const d=n('ppeak')-n('peep');if(d<=0)return null;
+    return {v:r1(n('vt')/d),u:'mL/cmH₂O',s:'info',tag:'Includes airway resistance',note:'If Cdyn falls while Cstat holds, look at the airway: secretions, bronchospasm or a kinked tube.'};
+  }},
+  raw:{t:'Airway resistance',need:['ppeak','pplat','flow'],f(){
+    const r=rawV();if(r===null)return null;
+    return {v:r1(r),u:'cmH₂O/L/s',s:r>15?'warn':'ok',tag:r>15?'Raised (> 15)':'Typical for intubated adult',note:'(Ppeak − Pplat) ÷ flow in L/s. Valid in volume control with constant flow.'};
+  }},
+  autopeep:{t:'Auto-PEEP',need:['totalpeep','peep'],f(){
+    if(!has('totalpeep','peep'))return null;const v=n('totalpeep')-n('peep');
+    return {v:rnd(Math.max(0,v),1),u:'cmH₂O',s:v>0.5?'warn':'ok',tag:v>0.5?'Present':'None measured',note:'Total PEEP from an expiratory hold minus set PEEP.'};
+  }},
+  tau:{t:'Expiratory time constant',need:['vt','pplat','peep','ppeak','flow'],f(){
+    const c=cstatV(),r=rawV();if(c===null||r===null)return null;
+    const tau=(c/1000)*r;const rows=[['3τ (about 95% exhaled)',(3*tau).toFixed(2)+' s']];
+    let s='info',tag='τ = Cstat × Raw';
+    if(has('rr','ti')){const te=60/n('rr')-n('ti');if(te>0){rows.push(['Expiratory time',te.toFixed(2)+' s'],['I:E','1:'+r1(te/n('ti'))]);
+      if(te<3*tau){s='warn';tag='Te shorter than 3τ'}else{s='ok';tag='Te ≥ 3τ'}}}
+    return {v:tau.toFixed(2),u:'s',s,tag,rows,note:'If expiratory time is shorter than 3τ, exhalation is incomplete and auto-PEEP builds.'};
+  }},
+  mp:{t:'Mechanical power',need:['rr','vt','ppeak','pplat','peep'],f(){
+    if(!has('rr','vt','ppeak','pplat','peep'))return null;
+    const v=0.098*n('rr')*(n('vt')/1000)*(n('ppeak')-0.5*(n('pplat')-n('peep')));
+    return {v:r1(v),u:'J/min',s:v>17?'warn':'ok',tag:v>17?'Above 17 J/min':'Below 17 J/min',note:'Simplified Gattinoni equation for volume control. Values above about 17 J/min are linked to higher mortality.'};
+  }},
+
+  /* ventilation */
+  ve:{t:'Minute ventilation',need:['rr','vt'],f(){
+    if(!has('rr','vt'))return null;const v=n('rr')*n('vt')/1000;const rows=[];const w=pbw();
+    if(w!==null)rows.push(['Per kg PBW',Math.round(v*1000/w)+' mL/kg/min']);
+    return {v:r1(v),u:'L/min',s:'info',tag:'RR × Vt',rows,note:'Typical resting adult 5–8 L/min.'};
+  }},
+  rrt:{t:'RR for target PaCO₂',need:['rr','paco2','targetPaco2'],f(){
+    if(!has('rr','paco2','targetPaco2'))return null;const tg=n('targetPaco2');if(tg<=0)return null;
+    const nr=n('rr')*n('paco2')/tg;const rows=[['Target PaCO₂',g(tg)]];
+    if(n('vt')!==null){const nv=n('vt')*n('paco2')/tg;const w=pbw();rows.push(['Or keep RR, change Vt to',Math.round(nv)+' mL'+(w!==null?' ('+r1(nv/w)+' mL/kg)':'')])}
+    return {v:Math.round(nr),u:'/min',s:nr>35?'warn':'info',tag:nr>35?'High rate: watch for auto-PEEP':'New rate',rows,
+      note:'Current RR × current PaCO₂ ÷ target. Assumes CO₂ production and dead space stay the same. Recheck ABG in 20–30 minutes.'};
+  }},
+  grad:{t:'PaCO₂ − EtCO₂ gradient',need:['paco2','etco2'],f(){
+    if(!has('paco2','etco2'))return null;const pc=n('paco2'),d=pc-n('etco2');
+    const rows=[['Alveolar dead-space fraction',pc>0?(d/pc).toFixed(2):'—']];
+    if(d<0)return {v:gf(d),u:gu(),s:'warn',tag:'Negative',rows,note:'EtCO₂ above PaCO₂ is unusual. Check that both were taken at the same time.'};
+    return {v:gf(d),u:gu(),s:d>5?'warn':'ok',tag:d>5?'Raised':'Normal (2–5 mmHg)',rows,note:'A widening gap means more dead space, e.g. low cardiac output, PE, high PEEP or COPD. Trend EtCO₂ against this gap.'};
+  }},
+  vdvt:{t:'Dead space (Vd/Vt)',need:['paco2','peco2'],f(){
+    if(!has('paco2','peco2'))return null;const pc=n('paco2');if(pc<=0)return null;
+    const v=(pc-n('peco2'))/pc;let s,tag;
+    if(v>=0.6){s='crit';tag='High (≥ 0.6)'}else if(v>=0.4){s='warn';tag='Raised (0.4–0.6)'}else{s='ok';tag='Normal range'}
+    return {v:v.toFixed(2),s,tag,note:'Enghoff method: (PaCO₂ − PĒCO₂) ÷ PaCO₂. Normal about 0.2–0.35. Vd/Vt ≥ 0.6 is linked to higher ARDS mortality.'};
+  }},
+  vr:{t:'Ventilatory ratio',need:['rr','vt','paco2','sex','height'],f(){
+    const w=pbw();if(w===null||!has('rr','vt','paco2'))return null;
+    const v=(n('rr')*n('vt')*n('paco2'))/(w*100*37.5);
+    return {v:v.toFixed(2),s:v>1.2?'warn':'ok',tag:v>1.2?'Raised':'Near normal (≈ 1)',note:'(VE × PaCO₂) ÷ (PBW × 100 × 37.5). Higher values mean less efficient ventilation (Sinha).'};
+  }},
+
+  /* ABG */
+  abg:{t:'ABG interpretation',span:true,need:['ph','paco2','hco3'],f(){
+    if(!has('ph','paco2','hco3'))return null;
+    const ph=n('ph'),pc=n('paco2'),h=n('hco3');
+    if(ph<6.5||ph>8||pc<=0||h<=0)return {need:[]};
+    const steps=[];
+    const st=ph<7.35?'acid':ph>7.45?'alk':'norm';
+    steps.push({s:st==='norm'?'ok':(ph<7.25||ph>7.55?'crit':'warn'),t:st==='acid'?'Acidemia: pH '+ph.toFixed(2)+' (below 7.35)':st==='alk'?'Alkalemia: pH '+ph.toFixed(2)+' (above 7.45)':'pH '+ph.toFixed(2)+' is within 7.35–7.45'});
+    const ra=pc>45,rl=pc<35,ma=h<22,ml=h>26;
+    steps.push({s:'info',t:'PaCO₂ '+g(pc)+' is '+(ra?'high':rl?'low':'normal')+'; HCO₃⁻ '+r1(h)+' mmol/L is '+(ma?'low':ml?'high':'normal')+'.'});
+    let prim=null;
+    if(st==='acid')prim=ra&&ma?'mixacid':ra?'ra':ma?'ma':null;
+    else if(st==='alk')prim=rl&&ml?'mixalk':rl?'rl':ml?'ml':null;
+    else{
+      if(ra&&ml)prim=ph<7.4?'ra':'ml';else if(rl&&ma)prim=ph<7.4?'ma':'rl';
+      else if(ra&&ma)prim='mixacid';else if(rl&&ml)prim='mixalk';
+      else if(ra)prim='ra';else if(rl)prim='rl';else if(ma)prim='ma';else if(ml)prim='ml';else prim='normal';
+    }
+    const A=agV();let head='';
+    if(prim==='ma'){
+      const e=1.5*h+8;let c;
+      if(pc>e+2)c='with an additional respiratory acidosis';else if(pc<e-2)c='with an additional respiratory alkalosis';else c='with appropriate respiratory compensation';
+      const type=A?(A.agc>12?'High anion gap metabolic acidosis':'Normal anion gap metabolic acidosis'):'Metabolic acidosis';
+      head=type+' '+c;
+      steps.push({s:'info',t:'Winter’s formula: expected PaCO₂ '+gf(e-2)+'–'+gf(e+2)+' '+unit+'. Measured '+g(pc)+'.'});
+    }else if(prim==='ml'){
+      const e=0.7*h+21;let c;
+      if(pc>e+2)c='with an additional respiratory acidosis';else if(pc<e-2)c='with an additional respiratory alkalosis';else c='with appropriate respiratory compensation';
+      head='Metabolic alkalosis '+c;
+      steps.push({s:'info',t:'Expected PaCO₂ (0.7 × HCO₃⁻ + 21): '+gf(e-2)+'–'+gf(e+2)+' '+unit+'. Measured '+g(pc)+'.'});
+    }else if(prim==='ra'){
+      const d=(pc-40)/10,a=24+d,c=24+3.5*d;
+      if(h<a-2)head='Respiratory acidosis with an additional metabolic acidosis';
+      else if(h>c+2)head='Respiratory acidosis with an additional metabolic alkalosis';
+      else if(Math.abs(h-a)<=2)head='Acute respiratory acidosis';
+      else if(Math.abs(h-c)<=2)head='Chronic (compensated) respiratory acidosis';
+      else head='Respiratory acidosis, acute-on-chronic or partly compensated';
+      steps.push({s:'info',t:'Expected HCO₃⁻: acute '+r1(a)+', chronic '+r1(c)+' mmol/L. Measured '+r1(h)+'.'});
+    }else if(prim==='rl'){
+      const d=(40-pc)/10,a=24-2*d,c=24-4*d;
+      if(h>a+2)head='Respiratory alkalosis with an additional metabolic alkalosis';
+      else if(h<c-2)head='Respiratory alkalosis with an additional metabolic acidosis';
+      else if(Math.abs(h-a)<=2)head='Acute respiratory alkalosis';
+      else if(Math.abs(h-c)<=2)head='Chronic (compensated) respiratory alkalosis';
+      else head='Respiratory alkalosis, partly compensated';
+      steps.push({s:'info',t:'Expected HCO₃⁻: acute '+r1(a)+', chronic '+r1(c)+' mmol/L. Measured '+r1(h)+'.'});
+    }else if(prim==='mixacid'){head='Mixed respiratory and metabolic acidosis'}
+    else if(prim==='mixalk'){head='Mixed respiratory and metabolic alkalosis'}
+    else if(prim==='normal'){head=(A&&A.agc>12)?'Normal pH, PaCO₂ and HCO₃⁻, but a high anion gap':'Normal acid–base values'}
+    else{head='No clear primary disorder';steps.push({s:'warn',t:'Values sit close to normal limits. Recheck the sample and follow the trend.'})}
+    if(st==='norm'&&prim&&prim!=='normal')steps.push({s:'warn',t:'pH is normal despite abnormal PaCO₂ or HCO₃⁻. Full compensation is uncommon (except chronic respiratory alkalosis), so consider a mixed disorder.'});
+    if(A){
+      steps.push({s:A.agc>12?'warn':'ok',t:'Anion gap '+r1(A.ag)+(A.corr?', albumin-corrected '+r1(A.agc):'')+' mmol/L '+(A.agc>12?'(high)':'(normal 8–12)')+'.'});
+      if(A.agc>12&&h<24){const dr=(A.agc-12)/(24-h);steps.push({s:'info',t:'Delta ratio '+dr.toFixed(2)+': '+drText(dr)+'.'})}
+    }else if(prim==='ma'||prim==='mixacid'){steps.push({s:'info',t:'Enter Na⁺ and Cl⁻ to check the anion gap.'})}
+    const po=n('pao2');
+    if(po!==null){const f=fio();let t='PaO₂ '+g(po);const s2=po<60?'crit':po<80?'warn':'ok';
+      t+=po<60?': hypoxemia':po<80?': mild hypoxemia':': adequate';
+      if(f!==null)t+=' on FiO₂ '+pct(f)+'% (P/F '+Math.round(po/f)+')';steps.push({s:s2,t:t+'.'})}
+    const calc=6.1+Math.log10(h/(0.03*pc));
+    steps.push(Math.abs(calc-ph)>0.04?{s:'warn',t:'Internal check: these PaCO₂ and HCO₃⁻ values predict pH '+calc.toFixed(2)+', not '+ph.toFixed(2)+'. Recheck the entries or the sample.'}:{s:'ok',t:'Internal check passed (Henderson–Hasselbalch pH '+calc.toFixed(2)+').'});
+    let s;if(st!=='norm')s=(ph<7.25||ph>7.55)?'crit':'warn';else s=(prim==='normal'&&!(A&&A.agc>12))?'ok':'warn';
+    return {head,s,tag:st==='acid'?'Acidemia':st==='alk'?'Alkalemia':'Normal pH',
+      html:'<ol class="steps">'+steps.map(x=>'<li><span class="dot d-'+x.s+'"></span><span>'+x.t+'</span></li>').join('')+'</ol>',
+      note:'Rules used: Winter’s formula; metabolic alkalosis 0.7 × HCO₃⁻ + 21 (±2); respiratory acidosis HCO₃⁻ +1 acute / +3.5 chronic per 10 mmHg PaCO₂; respiratory alkalosis −2 acute / −4 chronic.'};
+  }},
+  ag:{t:'Anion gap',need:['na','cl','hco3'],f(){
+    const A=agV();if(A===null)return null;const rows=[];
+    if(A.corr)rows.push(['Albumin-corrected',r1(A.agc)+' mmol/L']);
+    return {v:r1(A.ag),u:'mmol/L',s:A.agc>12?'warn':'ok',tag:A.agc>12?'High (> 12)':'Normal (8–12)',rows,
+      note:'Na⁺ − (Cl⁻ + HCO₃⁻). Albumin correction adds 2.5 for every 10 g/L below 40. Normal range varies by lab.'};
+  }},
+  delta:{t:'Delta ratio',need:['na','cl','hco3'],f(){
+    const A=agV();if(A===null)return null;const h=n('hco3');
+    if(!(A.agc>12&&h<24))return {v:'—',s:'info',tag:'Not applicable',note:'Use when the anion gap is high and HCO₃⁻ is below 24.'};
+    const d=(A.agc-12)/(24-h);
+    return {v:d.toFixed(2),s:'info',tag:d<0.4?'Normal-AG acidosis':d<0.8?'Mixed AG acidosis':d<=2?'Pure high-AG acidosis':'High-AG + metabolic alkalosis',
+      note:'(AG − 12) ÷ (24 − HCO₃⁻): '+drText(d)+'.'};
+  }},
+
+  /* weaning */
+  rsbi:{t:'RSBI (f/Vt)',need:['spRR','spVt'],f(){
+    if(!has('spRR','spVt'))return null;const vt=n('spVt');if(vt<=0)return null;
+    const v=n('spRR')/(vt/1000);
+    return {v:Math.round(v),u:'breaths/min/L',s:v<105?'ok':'warn',tag:v<105?'Favours weaning (< 105)':'Weaning less likely (≥ 105)',
+      note:'Measure over 1 minute of spontaneous breathing on minimal support (Yang & Tobin).'};
+  }},
+  sbt:{t:'SBT readiness',span:true,need:[],f(){
+    const items=[];const add=(t,st)=>items.push({t,st});
+    const pf=pfV();add('P/F ≥ 150',pf===null?'nodata':pf>=150?'met':'no');
+    const f=fio();add('FiO₂ ≤ 50%',f===null?'nodata':f<=0.5?'met':'no');
+    const pe=n('peep');add('PEEP ≤ 8 cmH₂O',pe===null?'nodata':pe<=8?'met':'no');
+    const ph=n('ph');add('pH ≥ 7.25',ph===null?'nodata':ph>=7.25?'met':'no');
+    let rs=null;if(has('spRR','spVt')&&n('spVt')>0)rs=n('spRR')/(n('spVt')/1000);
+    add('RSBI < 105',rs===null?'nodata':rs<105?'met':'no');
+    const nf=n('nif');add('NIF at least −20 cmH₂O',nf===null?'nodata':Math.abs(nf)>=20?'met':'no');
+    ['s_cause','s_hemo','s_awake','s_cough'].forEach(k=>add(F[k].l,S[k]?'met':'no'));
+    const met=items.filter(i=>i.st==='met').length,all=met===items.length;
+    return {v:met+'/'+items.length,u:'criteria met',s:all?'ok':'warn',tag:all?'Ready for an SBT':'Not all criteria met',
+      html:'<ul class="checklist">'+items.map(i=>'<li class="c-'+i.st+'"><span class="mk" aria-hidden="true">'+(i.st==='met'?'✓':i.st==='no'?'✕':'?')+'</span><span>'+i.t+(i.st==='nodata'?' (no data)':i.st==='no'?' (not met)':'')+'</span></li>').join('')+'</ul>',
+      note:'Tick the bedside items in the inputs. Your unit’s weaning protocol takes priority.'};
+  }},
+  rox:{t:'ROX index',need:['spo2','fio2','rr'],f(){
+    const sf=sfV(),rr=n('rr');if(sf===null||rr===null||rr<=0)return null;
+    const v=sf/rr,h=+(S.roxTime||2),cut={2:2.85,6:3.47,12:3.85}[h]||2.85;let s,tag;
+    if(v>=4.88){s='ok';tag='Low risk of HFNC failure'}else if(v<cut){s='crit';tag='High risk of intubation'}else{s='warn';tag='Grey zone: reassess in 1–2 h'}
+    return {v:v.toFixed(2),s,tag,rows:[['Time on HFNC',h+' h'],['Low-risk cut-off','≥ 4.88'],['High-risk cut-off at '+h+' h','< '+cut]],
+      note:'(SpO₂ ÷ FiO₂) ÷ RR. Validated in pneumonia with hypoxemic failure on HFNC (Roca 2019).'};
+  }},
+  hacor:{t:'HACOR score (NIV)',need:['hr','ph','gcs','rr','pao2','fio2'],f(){
+    const hr=n('hr'),ph=n('ph'),gcs=n('gcs'),rr=n('rr'),pf=pfV();
+    if(hr===null||ph===null||gcs===null||rr===null||pf===null)return null;
+    const a=hr>=121?1:0;
+    const b=ph>=7.35?0:ph>=7.30?2:ph>=7.25?3:4;
+    const c=gcs>=15?0:gcs>=13?2:gcs>=11?5:10;
+    const o=pf>=201?0:pf>=176?2:pf>=151?3:pf>=126?4:pf>=101?5:6;
+    const r=rr<=30?0:rr<=35?1:rr<=40?2:rr<=45?3:4;
+    const t=a+b+c+o+r;
+    return {v:t,u:'points',s:t>5?'crit':'ok',tag:t>5?'High risk of NIV failure (> 5)':'Lower risk (≤ 5)',
+      rows:[['Heart rate '+hr,a],['pH '+ph.toFixed(2),b],['GCS '+gcs,c],['P/F '+Math.round(pf),o],['RR '+rr,r]],
+      note:'Assess after 1 hour of NIV (Duan 2017). A score above 5 predicts failure; consider early intubation.'};
+  }},
+
+  /* ARDS */
+  global:{t:'ARDS: 2023 global definition',need:['fio2','pao2|spo2'],f(){
+    const f=fio();if(f===null)return null;const po=n('pao2'),sp=n('spo2');if(po===null&&sp===null)return null;
+    const pf=po!==null?po/f:null,sfOk=sp!==null&&sp<=97,sf=sfOk?sp/f:null;
+    const mode=S.supMode||'intubated';const crit=['c_time','c_bilat','c_card'].filter(k=>S[k]).length;
+    const label={intubated:'Invasive ventilation',hfno:'HFNO ≥ 30 L/min',niv:'NIV/CPAP, PEEP ≥ 5',limited:'Resource-limited setting'}[mode];
+    const rows=[['P/F',pf!==null?Math.round(pf):'—'],['S/F',sf!==null?Math.round(sf):(sp!==null?'SpO₂ > 97%, not usable':'—')],['Clinical criteria',crit+'/3 confirmed'],['Support',label]];
+    const note='Matthay et al. 2024. Non-intubated patients need HFNO ≥ 30 L/min or NIV/CPAP with PEEP ≥ 5. In resource-limited settings no minimum support is needed and lung ultrasound can show bilateral opacities.';
+    const oxy=(pf!==null&&pf<=300)||(sf!==null&&sf<=315);
+    if(!oxy)return {v:'Not met',s:'info',tag:'Oxygenation above cut-off',rows,note};
+    let v,s,tag;
+    if(mode==='intubated'){
+      let sev;if(pf!==null)sev=pf>200?'Mild':pf>100?'Moderate':'Severe';else sev=sf>235?'Mild':sf>148?'Moderate':'Severe';
+      v=sev;s=sev==='Mild'?'warn':'crit';tag='Intubated ARDS';
+    }else{v='ARDS';s='crit';tag=mode==='limited'?'Resource-limited criteria':'Non-intubated ARDS'}
+    if(crit<3){s='warn';tag='Confirm clinical criteria'}
+    return {v,s,tag,rows,note};
+  }},
+  berlin:{t:'ARDS: Berlin definition',need:['pao2','fio2','peep'],f(){
+    const pf=pfV(),pe=n('peep');if(pf===null||pe===null)return null;
+    const crit=['c_time','c_bilat','c_card'].filter(k=>S[k]).length;
+    const rows=[['P/F',Math.round(pf)],['PEEP',rnd(pe,1)+' cmH₂O'],['Clinical criteria',crit+'/3 confirmed']];
+    const note='Berlin 2012: mild 201–300, moderate 101–200, severe ≤ 100, all with PEEP or CPAP ≥ 5 cmH₂O.';
+    if(pe<5)return {v:'Not met',s:'info',tag:'PEEP below 5 cmH₂O',rows,note};
+    if(pf>300)return {v:'Not met',s:'info',tag:'P/F above 300',rows,note};
+    const sev=pf>200?'Mild':pf>100?'Moderate':'Severe';
+    if(crit<3)return {v:sev,s:'warn',tag:'Confirm clinical criteria',rows,note};
+    return {v:sev,s:sev==='Mild'?'warn':'crit',tag:sev+' ARDS',rows,note};
+  }},
+  murray:{t:'Murray lung injury score',need:['cxr','pao2','fio2','peep'],f(){
+    const pf=pfV(),pe=n('peep');if(!S.cxr||pf===null||pe===null)return null;
+    const parts=[];parts.push(['Chest X-ray: '+S.cxr+' quadrant'+(S.cxr==='1'?'':'s'),+S.cxr]);
+    parts.push(['P/F '+Math.round(pf),pf>=300?0:pf>=225?1:pf>=175?2:pf>=100?3:4]);
+    parts.push(['PEEP '+rnd(pe,1),pe<=5?0:pe<=8?1:pe<=11?2:pe<=14?3:4]);
+    const c=cstatV();if(c!==null)parts.push(['Compliance '+Math.round(c),c>=80?0:c>=60?1:c>=40?2:c>=20?3:4]);
+    const sc=parts.reduce((a,p)=>a+p[1],0)/parts.length;let s,tag;
+    if(sc===0){s='ok';tag='No lung injury'}else if(sc<=2.5){s='warn';tag='Mild–moderate lung injury'}else{s='crit';tag='Severe lung injury'}
+    return {v:sc.toFixed(2),u:'/ 4',s,tag,rows:parts.map(p=>[p[0],p[1]+' pts']),
+      note:'Average of the components used. Compliance needs Vt and Pplat. A score of 3 or more is a common ECMO referral trigger.'};
+  }},
+  peeptab:{t:'ARDSnet PEEP / FiO₂ tables',span:true,need:['fio2'],f(){
+    const f=fio();if(f===null)return null;
+    const fr=Math.min(1,Math.max(0.3,Math.round(f*10)/10));
+    const hit=e=>fr>=e[0]-1e-9&&fr<=e[1]+1e-9;
+    const fl=e=>e[0]===e[1]?e[0].toFixed(1):e[0].toFixed(1)+'–'+e[1].toFixed(1);
+    const tbl=(name,T)=>'<div class="tbl-wrap"><p>'+name+'</p><table><tr><th scope="row">FiO₂</th>'+T.map(e=>'<td class="'+(hit(e)?'hit':'')+'">'+fl(e)+'</td>').join('')+'</tr><tr><th scope="row">PEEP</th>'+T.map(e=>'<td class="'+(hit(e)?'hit':'')+'">'+e[2]+'</td>').join('')+'</tr></table></div>';
+    const lh=LOW.filter(hit).map(e=>e[2]),hh=HIGH.filter(hit).map(e=>e[2]);
+    return {v:fr.toFixed(1),u:'FiO₂',s:'info',tag:'Matching columns highlighted',
+      rows:[['Lower PEEP / higher FiO₂','PEEP '+(lh.join(', ')||'—')],['Higher PEEP / lower FiO₂','PEEP '+(hh.join(', ')||'—')]],
+      html:tbl('Lower PEEP / higher FiO₂',LOW)+tbl('Higher PEEP / lower FiO₂',HIGH),
+      note:'Oxygenation goal: PaO₂ 55–80 mmHg or SpO₂ 88–95%. Swipe the tables sideways on a phone.'};
+  }},
+
+  /* tools */
+  ncfio2:{t:'Nasal cannula FiO₂ estimate',need:['ncFlow'],f(){
+    const fl=n('ncFlow');if(fl===null||fl<0)return null;
+    const v=Math.min(21+4*fl,45);
+    return {v:Math.round(v),u:'%',s:'info',tag:fl>6?'Capped at 6 L/min':'21 + 4 × flow',
+      note:'Rough estimate. Real FiO₂ varies with breathing pattern and mouth breathing.',btn:{label:'Use as FiO₂',act:'useNc'}};
+  }},
+  cyl:{t:'Oxygen cylinder duration',need:['cylFlow'],f(){
+    const mode=S.cylUnit||'bar',fl=n('cylFlow');let usable;const miss=[];
+    if(mode==='psi'){
+      if(!S.cylSize)miss.push('cylSize');if(n('cylPpsi')===null)miss.push('cylPpsi');if(fl===null)miss.push('cylFlow');
+      if(miss.length)return {need:miss};
+      const res=n('cylResPsi')!==null?n('cylResPsi'):200;usable=(n('cylPpsi')-res)*CYL[S.cylSize];
+    }else{
+      if(n('cylCap')===null)miss.push('cylCap');if(n('cylPbar')===null)miss.push('cylPbar');if(fl===null)miss.push('cylFlow');
+      if(miss.length)return {need:miss};
+      const res=n('cylResBar')!==null?n('cylResBar'):0;usable=n('cylCap')*(n('cylPbar')-res);
+    }
+    if(fl<=0)return {need:[]};
+    const note=mode==='psi'?'(Pressure − reserve) × factor ÷ flow. Factors: D 0.16, E 0.28, M 1.56, G 2.41, H/K 3.14 L/psi.':'Water capacity × (pressure − reserve) gives litres of oxygen, divided by flow.';
+    if(usable<=0)return {v:'0',u:'min',s:'crit',tag:'At or below reserve',note};
+    const m=Math.floor(usable/fl),hh=Math.floor(m/60),mm=m%60;
+    return {v:m,u:'min',s:m<30?'warn':'ok',tag:m<30?'Under 30 minutes':'At '+fl+' L/min',rows:[['Time',hh+' h '+String(mm).padStart(2,'0')+' min'],['Usable oxygen',Math.round(usable)+' L']],note};
+  }},
+  ett:{t:'Endotracheal tube size',need:['age'],f(){
+    const a=n('age');if(a===null)return null;
+    const note='Starting estimates. Confirm placement with waveform capnography and chest X-ray, and keep a size above and below ready.';
+    if(a>=14){
+      const sx=S.sex,id=sx==='F'?'7.0–7.5':sx==='M'?'7.5–8.0':'7.0–8.0',dep=sx==='F'?'21':sx==='M'?'23':'21–23';
+      const rows=[['Depth at incisors',dep+' cm']];const h=heightCm();if(h!==null)rows.push(['Height-based depth (0.1 × height + 4)',r1(0.1*h+4)+' cm']);
+      return {v:id,u:'mm ID',s:'info',tag:sx?'Adult':'Adult (add sex for a narrower range)',rows,note};
+    }
+    if(a>=1){
+      const cf=Math.round((a/4+3.5)*2)/2,uc=Math.round((a/4+4)*2)/2;
+      return {v:cf.toFixed(1),u:'mm ID cuffed',s:'info',tag:'Child',rows:[['Uncuffed',uc.toFixed(1)+' mm'],['Oral depth at lip (age/2 + 12)',r1(a/2+12)+' cm'],['Or 3 × ID',r1(3*cf)+' cm']],note};
+    }
+    const w=n('weight');if(w===null)return {need:['weight']};
+    const id=w<1?'2.5':w<2?'3.0':w<3?'3.0–3.5':'3.5–4.0';
+    return {v:id,u:'mm ID',s:'info',tag:'Neonate / infant',rows:[['Oral depth at lip (weight + 6)',r1(w+6)+' cm']],note};
+  }}
+};
+
+/* ---------- rendering ---------- */
+function sectionOf(k){return SECTIONS.find(s=>s.inputs.indexOf(k)>-1)}
+function isMissing(k){const d=F[k];if(d.kind==='sel')return !S[k];if(d.kind==='chk')return false;return n(k)===null}
+function missing(need){return need.filter(k=>k.indexOf('|')>-1?k.split('|').every(isMissing):isMissing(k))}
+function nameFor(k,sec){
+  return k.split('|').map(x=>{const here=SECTIONS.find(s=>s.id===sec);if(here&&here.inputs.indexOf(x)>-1)return F[x].l;const h=sectionOf(x);return F[x].l+(h?' ('+(h.tab||h.name)+' tab)':'')}).join(' or ');
+}
+function listFmt(a){if(a.length<2)return a.join('');return a.slice(0,-1).join(', ')+' and '+a[a.length-1]}
+
+function inputHTML(sec,k){
+  const d=F[k],id=sec+'-'+k,show=d.show?' data-show="'+d.show+'"':'';
+  if(d.kind==='chk')return '<label class="chk"'+show+' for="'+id+'"><input type="checkbox" id="'+id+'" data-k="'+k+'"><span>'+d.l+'</span></label>';
+  if(d.kind==='sel')return '<label class="fld wide"'+show+' for="'+id+'"><span class="fl">'+d.l+'</span><select id="'+id+'" data-k="'+k+'">'+d.o.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select></label>';
+  const u=d.kind==='gas'?unit:(d.u||'');
+  return '<label class="fld"'+show+' for="'+id+'"><span class="fl">'+d.l+'</span><span class="inw"><input id="'+id+'" data-k="'+k+'" type="text" inputmode="decimal" autocomplete="off"><span class="un"'+(d.kind==='gas'?' data-gasunit':'')+'>'+u+'</span></span>'+(d.h?'<span class="hint">'+d.h+'</span>':'')+'</label>';
+}
+
+function buildUI(){
+  const tabs=document.getElementById('tabs'),wrap=document.getElementById('sections');
+  tabs.innerHTML=SECTIONS.map(s=>'<button type="button" role="tab" id="tab-'+s.id+'" data-sec="'+s.id+'" aria-controls="sec-'+s.id+'" aria-selected="false">'+(s.tab||s.name)+'</button>').join('');
+  wrap.innerHTML=SECTIONS.map(s=>{
+    const conv=s.conv?'<div class="panel"><h3 class="lbl">Pressure converter</h3><div class="grid">'+
+      ['convMm|mmHg','convKpa|kPa','convCm|cmH₂O'].map(x=>{const p=x.split('|');return '<label class="fld" for="tools-'+p[0]+'"><span class="fl">'+p[1]+'</span><span class="inw"><input id="tools-'+p[0]+'" data-k="'+p[0]+'" type="text" inputmode="decimal" autocomplete="off"><span class="un">'+p[1]+'</span></span></label>'}).join('')+
+      '</div></div>':'';
+    return '<section class="sec" id="sec-'+s.id+'" role="tabpanel" aria-labelledby="tab-'+s.id+'" hidden>'+
+      '<div class="sec-head"><h2>'+s.name+'</h2><p>'+s.blurb+'</p></div>'+
+      '<div class="layout"><div class="side"><div class="panel"><h3 class="lbl">Inputs</h3><div class="grid">'+s.inputs.map(k=>inputHTML(s.id,k)).join('')+'</div></div>'+conv+'</div>'+
+      '<div class="cards">'+s.calcs.map(c=>'<article class="card'+(CALCS[c].span?' span2':'')+'" data-cid="'+c+'" data-sec="'+s.id+'"></article>').join('')+'</div></div></section>';
+  }).join('');
+}
+
+function cardHTML(cid,res,sec){
+  const c=CALCS[cid];let h='<header><h3>'+c.t+'</h3>';
+  const empty=!res||res.need;
+  if(!empty&&res.tag)h+='<span class="pill s-'+(res.s||'info')+'">'+res.tag+'</span>';
+  h+='</header>';
+  if(empty){const m=res&&res.need?res.need:missing(c.need);
+    return h+(m.length?'<p class="need">Enter '+listFmt(m.map(k=>nameFor(k,sec)))+'.</p>':'<p class="need">Check the values entered.</p>')}
+  if(res.head)h+='<p class="headline">'+res.head+'</p>';
+  if(res.v!==undefined)h+='<div class="val"><span class="num">'+res.v+'</span>'+(res.u?'<span class="u">'+res.u+'</span>':'')+'</div>';
+  if(res.rows&&res.rows.length)h+='<dl class="rows">'+res.rows.map(r=>'<div><dt>'+r[0]+'</dt><dd>'+r[1]+'</dd></div>').join('')+'</dl>';
+  if(res.html)h+=res.html;
+  if(res.note)h+='<p class="note">'+res.note+'</p>';
+  if(res.btn)h+='<button type="button" class="btn small" data-act="'+res.btn.act+'">'+res.btn.label+'</button>';
+  return h;
+}
+
+function recompute(){
+  const out={};
+  for(const cid in CALCS){let r=null;try{r=CALCS[cid].f()}catch(e){r=null}out[cid]=r}
+  LAST=out;
+  document.querySelectorAll('.card[data-cid]').forEach(el=>{
+    const r=out[el.dataset.cid];el.innerHTML=cardHTML(el.dataset.cid,r,el.dataset.sec);
+    el.dataset.s=(!r||r.need)?'empty':(r.s||'');
+  });
+  const cu=S.cylUnit||'bar';
+  document.querySelectorAll('[data-show]').forEach(el=>{el.hidden=el.dataset.show!==cu});
+}
+
+/* ---------- inputs ---------- */
+function parseNum(s){s=String(s).trim().replace(',','.').replace('−','-');if(s===''||s==='-'||s==='.')return null;const v=Number(s);return isFinite(v)?v:null}
+function fmtIn(k){const v=S[k];if(typeof v!=='number'||!isFinite(v))return '';if(F[k].kind==='gas')return unit==='kPa'?String(rnd(v/G,2)):String(rnd(v,1));return String(v)}
+function setInput(el,k){const d=F[k];if(!d)return;if(d.kind==='chk')el.checked=!!S[k];else if(d.kind==='sel')el.value=S[k]||'';else el.value=fmtIn(k)}
+function syncAll(){document.querySelectorAll('[data-k]').forEach(el=>{const k=el.dataset.k;if(F[k])setInput(el,k)})}
+
+function onInput(e){
+  const el=e.target,k=el&&el.dataset?el.dataset.k:null;if(!k)return;
+  if(k.indexOf('conv')===0){convert(el,k);return}
+  const d=F[k];if(!d)return;
+  if(d.kind==='chk')S[k]=el.checked;
+  else if(d.kind==='sel')S[k]=el.value;
+  else{const raw=parseNum(el.value);S[k]=raw===null?null:(d.kind==='gas'&&unit==='kPa'?raw*G:raw)}
+  document.querySelectorAll('[data-k="'+k+'"]').forEach(o=>{if(o!==el)setInput(o,k)});
+  if(exState==='example'){exState='edited';renderNotice()}
+  recompute();
+}
+function convert(el,k){
+  const v=parseNum(el.value);const ids={convMm:'tools-convMm',convKpa:'tools-convKpa',convCm:'tools-convCm'};
+  let mm=null;if(v!==null)mm=k==='convMm'?v:k==='convKpa'?v*G:v/1.35951;
+  const vals={convMm:mm===null?'':String(rnd(mm,1)),convKpa:mm===null?'':String(rnd(mm/G,2)),convCm:mm===null?'':String(rnd(mm*1.35951,1))};
+  for(const key in ids){if(key!==k){const t=document.getElementById(ids[key]);if(t)t.value=vals[key]}}
+}
+
+function setUnit(u){
+  unit=u;
+  document.querySelectorAll('[data-unit]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.unit===u)));
+  document.querySelectorAll('[data-gasunit]').forEach(s=>{s.textContent=u});
+  syncAll();recompute();
+  try{localStorage.setItem('rtcalc-unit',u)}catch(e){}
+}
+
+function show(id){
+  if(!SECTIONS.some(s=>s.id===id))id='oxygen';
+  SECTIONS.forEach(s=>{
+    const on=s.id===id;document.getElementById('sec-'+s.id).hidden=!on;
+    const t=document.getElementById('tab-'+s.id);t.setAttribute('aria-selected',String(on));
+    if(on&&t.scrollIntoView)try{t.scrollIntoView({block:'nearest',inline:'nearest'})}catch(e){}
+  });
+  try{localStorage.setItem('rtcalc-sec',id)}catch(e){}
+  try{history.replaceState(null,'','#'+id)}catch(e){}
+}
+
+function renderNotice(){
+  const el=document.getElementById('notice');
+  if(exState==='clear'){el.hidden=true;return}
+  el.hidden=false;
+  el.textContent=exState==='example'?'Example patient loaded so you can see how it works. Replace the values with your patient’s, or tap Clear all at the bottom.':'Some fields may still hold example values. Check every field, or tap Clear all to start fresh.';
+}
+
+function loadExample(){S=Object.assign({},DEFAULTS);for(const k in F){if(F[k].s!==null&&F[k].s!==undefined)S[k]=F[k].s}exState='example';syncAll();renderNotice();recompute()}
+function clearAll(){S=Object.assign({},DEFAULTS);exState='clear';syncAll();['tools-convMm','tools-convKpa','tools-convCm'].forEach(i=>{const t=document.getElementById(i);if(t)t.value=''});renderNotice();recompute();toast('All values cleared')}
+
+/* ---------- summary ---------- */
+function summary(){
+  const lines=['RT calculations, '+new Date().toLocaleString(),'Blood gas units: '+unit];
+  SECTIONS.forEach(sec=>{
+    if(sec.id==='tools')return;const ls=[];
+    sec.calcs.forEach(cid=>{
+      if(cid==='peeptab'||cid==='sbt')return;const r=LAST[cid];if(!r||r.need)return;const c=CALCS[cid];
+      if(r.head){ls.push(c.t+': '+r.head);return}
+      if(r.v===undefined||r.v==='—')return;
+      ls.push(c.t+': '+r.v+(r.u?' '+r.u:'')+(r.tag?' ('+r.tag+')':''));
+    });
+    if(sec.id==='weaning'&&LAST.sbt&&!LAST.sbt.need)ls.unshift('SBT readiness: '+LAST.sbt.v+' criteria met');
+    if(ls.length){lines.push('');lines.push(sec.name.toUpperCase());ls.forEach(l=>lines.push(l))}
+  });
+  return lines.join('\n');
+}
+let toastTimer=null;
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true},2200)}
+function copySummary(){
+  const text=summary();const box=document.getElementById('copyBox'),ta=document.getElementById('copyText');
+  const fallback=()=>{ta.value=text;box.hidden=false;ta.focus();ta.select();toast('Select the text below and copy it')};
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(()=>{box.hidden=true;toast('Summary copied')}).catch(fallback)}
+    else fallback();
+  }catch(e){fallback()}
+}
+
+/* ---------- wire up ---------- */
+buildUI();
+document.addEventListener('input',onInput);
+document.addEventListener('change',onInput);
+document.getElementById('tabs').addEventListener('click',e=>{const b=e.target.closest('[data-sec]');if(b)show(b.dataset.sec)});
+document.querySelectorAll('[data-unit]').forEach(b=>b.addEventListener('click',()=>setUnit(b.dataset.unit)));
+document.getElementById('copyBtn').addEventListener('click',copySummary);
+document.getElementById('exampleBtn').addEventListener('click',()=>{loadExample();toast('Example patient loaded')});
+document.getElementById('clearBtn').addEventListener('click',clearAll);
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  if(b.dataset.act==='useNc'){const fl=n('ncFlow');if(fl===null)return;const v=Math.round(Math.min(21+4*fl,45));S.fio2=v;
+    document.querySelectorAll('[data-k="fio2"]').forEach(o=>setInput(o,'fio2'));recompute();toast('FiO₂ set to '+v+'%')}
+});
+
+let savedUnit='mmHg',savedSec=null;
+try{savedUnit=localStorage.getItem('rtcalc-unit')||'mmHg';savedSec=localStorage.getItem('rtcalc-sec')}catch(e){}
+unit=savedUnit==='kPa'?'kPa':'mmHg';
+document.querySelectorAll('[data-unit]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.unit===unit)));
+document.querySelectorAll('[data-gasunit]').forEach(s=>{s.textContent=unit});
+loadExample();
+const hash=(location.hash||'').replace('#','');
+show(SECTIONS.some(s=>s.id===hash)?hash:(savedSec||'oxygen'));
+})();
+</script>
+</body>
+</html>
